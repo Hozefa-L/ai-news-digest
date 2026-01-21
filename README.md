@@ -1,54 +1,50 @@
 # 🤖 AI News Daily Digest
 
-Automated content curation system that monitors AI/tech news sources, filters by relevance, extracts key information, generates summaries, and publishes daily digests to Notion.
+Automated content curation system that demonstrates **Groq + Tavily MCP** working together as an agentic system. The AI autonomously searches for news, extracts content, generates summaries, and publishes daily digests to Notion.
 
-**100% Free** - Uses free tiers of Tavily, Groq, Notion API, and GitHub Actions.
+**100% Free** - Uses free tiers of Groq, Tavily, Notion API, and GitHub Actions.
+
+## ✨ What Makes This Special: MCP Architecture
+
+This project showcases the power of **Model Context Protocol (MCP)** — instead of making separate API calls, the LLM uses Tavily as an integrated tool:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    GROQ + TAVILY MCP                        │
+│                                                             │
+│   ┌─────────────┐    MCP Protocol    ┌─────────────────┐   │
+│   │             │◄──────────────────►│                 │   │
+│   │  Groq LLM   │    Tool Calls      │  Tavily MCP     │   │
+│   │  (compound) │                    │  - tavily_search│   │
+│   │             │                    │  - tavily_extract│  │
+│   └─────────────┘                    └─────────────────┘   │
+│         │                                                   │
+│         │ Curated JSON output                              │
+│         ▼                                                   │
+│   ┌─────────────────────────────────────────────────────┐  │
+│   │                    Notion API                        │  │
+│   │              (Published Digest)                      │  │
+│   └─────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key Difference**: The LLM **decides** when and how to use Tavily tools, rather than us orchestrating separate API calls. This is true agentic behavior!
 
 ## Features
 
-- 📡 **Automated Search**: Finds the latest AI/tech news daily
-- 📄 **Content Extraction**: Pulls full article content for better summaries
-- 🤖 **AI Summarization**: Generates concise summaries using Groq's LLaMA 3.3
-- 🏷️ **Smart Tagging**: Auto-classifies articles (LLM, Funding, Startup, etc.)
+- 🔗 **MCP Integration**: Groq's Responses API with Tavily MCP tools
+- 🤖 **Agentic Workflow**: LLM autonomously searches and curates
+- 📰 **Smart Curation**: AI selects and summarizes top 10 stories
+- 🏷️ **Auto-Classification**: Topics tagged (LLM, Funding, Startup, etc.)
 - 📊 **Notion Database**: Searchable, filterable knowledge base
-- ⏰ **Daily Automation**: Runs automatically via GitHub Actions
-
-## Architecture
-
-```
-GitHub Actions (Daily Cron)
-        │
-        ▼
-┌───────────────────┐
-│  1. SEARCH        │  Tavily API (~2 credits)
-│  AI/tech news     │  Last 24 hours, top 15 results
-└───────────────────┘
-        │
-        ▼
-┌───────────────────┐
-│  2. EXTRACT       │  Tavily API (~2 credits)
-│  Full content     │  Top 10 articles
-└───────────────────┘
-        │
-        ▼
-┌───────────────────┐
-│  3. SUMMARIZE     │  Groq API (free)
-│  LLaMA 3.3 70B    │  Per-article summaries + intro
-└───────────────────┘
-        │
-        ▼
-┌───────────────────┐
-│  4. PUBLISH       │  Notion API (free)
-│  Database entry   │  Formatted digest page
-└───────────────────┘
-```
+- ⏰ **Daily Automation**: Runs via GitHub Actions
 
 ## Free Tier Usage
 
 | Service | Monthly Limit | Our Usage | Headroom |
 |---------|---------------|-----------|----------|
 | Tavily | 1,000 credits | ~150 credits | 85% |
-| Groq | Rate-limited | ~300 calls | 99% |
+| Groq | Rate-limited | ~30 calls | 99% |
 | Notion API | Unlimited | ~100 calls | ∞ |
 | GitHub Actions | Unlimited (public) | ~90 min | ∞ |
 
@@ -93,11 +89,12 @@ GitHub Actions (Daily Cron)
 | `Topics` | Multi-select | Add options: `LLM`, `Funding`, `Startup`, `Product Launch`, `Research`, `Regulation`, `Open Source` |
 | `Article Count` | Number | |
 
-##### Connect Integration to Database
+##### ⚠️ Connect Integration to Database (Important!)
 1. Open your database page in Notion
-2. Click **•••** (three dots) in the top right
+2. Click **⋯** (three dots) in the top right
 3. Click **"+ Add connections"**
 4. Search for and select `AI News Digest`
+5. Click **Confirm**
 
 ##### Get Database ID
 1. Open your database in Notion
@@ -106,31 +103,68 @@ GitHub Actions (Daily Cron)
 
 ---
 
-### Step 2: Deploy to GitHub
+### Step 2: Test Locally (Recommended)
 
-#### 2.1 Create Repository
+Before deploying, test on your machine:
+
+```bash
+# Clone your repo
+git clone https://github.com/YOUR_USERNAME/ai-news-digest.git
+cd ai-news-digest
+
+# Set environment variables
+export TAVILY_API_KEY="your-tavily-key"
+export GROQ_API_KEY="your-groq-key"
+export NOTION_API_KEY="your-notion-secret"
+export NOTION_DATABASE_ID="your-database-id"
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run
+python daily_digest.py
+```
+
+You should see output like:
+```
+============================================================
+🚀 AI News Daily Digest (Groq + Tavily MCP)
+   2026-01-21 10:30
+============================================================
+✓ All environment variables configured
+
+📡 Step 1: Searching and curating AI news via MCP...
+🤖 Using Groq + Tavily MCP to search and curate news...
+✓ Curated 10 articles
+✓ Topics covered: LLM, Funding, Startup, Product Launch
+
+📤 Step 2: Publishing to Notion...
+✓ Notion digest created: https://notion.so/...
+
+============================================================
+✅ Daily digest published successfully!
+============================================================
+```
+
+---
+
+### Step 3: Deploy to GitHub
+
+#### 3.1 Create Repository
 1. Go to [github.com/new](https://github.com/new)
 2. Name: `ai-news-digest`
 3. Select **Public** (required for free GitHub Actions)
 4. Click **Create repository**
 
-#### 2.2 Upload Files
+#### 3.2 Upload Files
 Upload these files to your repository:
 - `daily_digest.py`
 - `requirements.txt`
 - `.github/workflows/daily-digest.yml`
+- `.gitignore`
+- `.env.example`
 
-Or use Git:
-```bash
-git clone https://github.com/YOUR_USERNAME/ai-news-digest.git
-cd ai-news-digest
-# Copy the files here
-git add .
-git commit -m "Initial commit"
-git push
-```
-
-#### 2.3 Add Secrets
+#### 3.3 Add Secrets
 1. Go to your repo → **Settings** → **Secrets and variables** → **Actions**
 2. Click **"New repository secret"** for each:
 
@@ -143,16 +177,16 @@ git push
 
 ---
 
-### Step 3: Test & Run
+### Step 4: Run & Schedule
 
 #### Manual Test Run
 1. Go to your repo → **Actions** tab
 2. Click **"Daily AI News Digest"** workflow
 3. Click **"Run workflow"** → **"Run workflow"**
-4. Watch the logs for any errors
+4. Watch the logs
 
-#### Automatic Scheduling
-The workflow runs automatically at **8:00 AM UTC** daily. 
+#### Automatic Schedule
+The workflow runs automatically at **8:00 AM UTC** daily.
 
 To change the time, edit `.github/workflows/daily-digest.yml`:
 ```yaml
@@ -166,12 +200,64 @@ Use [crontab.guru](https://crontab.guru) to help with cron syntax.
 
 ---
 
+## How the MCP Magic Works
+
+```python
+# The key part - Tavily as an MCP tool
+tools = [{
+    "type": "mcp",
+    "server_url": f"https://mcp.tavily.com/mcp/?tavilyApiKey={TAVILY_API_KEY}",
+    "server_label": "tavily",
+    "require_approval": "never",
+}]
+
+# Groq's Responses API with MCP
+response = requests.post(
+    "https://api.groq.com/openai/v1/responses",
+    json={
+        "model": "compound-beta",
+        "input": "Search for AI news and create a digest...",
+        "tools": tools,
+    }
+)
+```
+
+The LLM receives access to Tavily tools (`tavily_search`, `tavily_extract`) and **autonomously decides** how to use them based on the task. This is fundamentally different from making separate API calls!
+
+---
+
+## Troubleshooting
+
+### "Notion creation error: 404"
+The integration isn't connected to your database:
+1. Open your database in Notion
+2. Click **⋯** → **"+ Add connections"**
+3. Select your `AI News Digest` integration
+
+### "Groq MCP error: 429"
+Rate limited. The script includes automatic retries with backoff. If persistent:
+- Wait a few minutes and try again
+- Check your Groq usage at [console.groq.com](https://console.groq.com)
+
+### "No articles found"
+- Tavily may have returned empty results
+- Check your Tavily API key is valid
+- Try running again (news availability varies)
+
+### JSON parsing errors
+The LLM occasionally formats responses incorrectly. The script handles most cases, but if persistent, try running again.
+
+---
+
 ## Customization
 
-### Change Search Topics
-Edit `daily_digest.py`:
+### Change Search Focus
+Edit the prompt in `search_and_curate_news()`:
 ```python
-SEARCH_QUERY = "AI artificial intelligence LLM startup funding product launch"
+prompt = f"""...
+Use the tavily_search tool to search for:
+- Query: "YOUR CUSTOM SEARCH TERMS"
+...
 ```
 
 ### Change Number of Articles
@@ -179,82 +265,40 @@ SEARCH_QUERY = "AI artificial intelligence LLM startup funding product launch"
 MAX_ARTICLES = 10  # Change to 5, 15, etc.
 ```
 
-### Add/Remove Topic Tags
+### Add Custom Topics
+Modify the topic classification in the prompt:
 ```python
-TOPIC_TAGS = {
-    "LLM": ["llm", "language model", ...],
-    "Your New Topic": ["keyword1", "keyword2"],
-}
+Topics (classify as: LLM, Funding, Startup, Product Launch, Research, Regulation, Open Source, YOUR_NEW_TOPIC)
 ```
 
 ---
 
-## Troubleshooting
+## Project Structure
 
-### "Missing environment variables"
-- Check that all 4 secrets are added in GitHub repo settings
-- Secret names must match exactly (case-sensitive)
-
-### "Notion creation error: 401"
-- Your Notion integration secret may be wrong
-- The integration may not be connected to the database
-
-### "Notion creation error: 404"
-- Database ID is incorrect
-- Database may have been deleted
-
-### "Tavily search error"
-- API key may be invalid
-- You may have exceeded your monthly credit limit
-
-### No new digest appearing
-- Check GitHub Actions logs for errors
-- Verify the workflow is enabled (Actions → select workflow → Enable)
-
----
-
-## Local Development
-
-Run locally for testing:
-
-```bash
-# Set environment variables
-export TAVILY_API_KEY="your-key"
-export GROQ_API_KEY="your-key"
-export NOTION_API_KEY="your-key"
-export NOTION_DATABASE_ID="your-database-id"
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run
-python daily_digest.py
+```
+ai-news-digest/
+├── daily_digest.py          # Main script (Groq + Tavily MCP)
+├── requirements.txt         # Python dependencies
+├── .github/
+│   └── workflows/
+│       └── daily-digest.yml # GitHub Actions automation
+├── .env.example             # Template for local testing
+├── .gitignore               # Keeps secrets safe
+└── README.md                # This file
 ```
 
 ---
 
-## Cost Breakdown
+## Credits
 
-**Monthly cost: $0**
+- **Groq**: Ultra-fast LLM inference with MCP support
+- **Tavily**: AI-optimized search API with MCP server
+- **Notion**: Beautiful database and publishing platform
 
-- Tavily: ~5 credits/day × 30 days = 150 credits (free tier: 1,000)
-- Groq: ~11 API calls/day × 30 days = 330 calls (free tier: generous limits)
-- Notion: Unlimited API calls on free plan
-- GitHub Actions: Free for public repositories
+Built following the [Groq + Tavily MCP documentation](https://console.groq.com/docs/tavily).
 
 ---
 
 ## License
 
-MIT License - Feel free to modify and use for your own projects!
-
----
-
-## Contributing
-
-PRs welcome! Ideas for improvements:
-- Email delivery option
-- Slack/Discord notifications
-- Multiple topic digests
-- Sentiment analysis
-- Historical trend tracking
+MIT License - Feel free to modify and use!

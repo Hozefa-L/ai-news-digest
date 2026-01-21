@@ -1,16 +1,16 @@
 """
-AI News Daily Digest
-Automated content curation system that monitors AI/tech news sources,
-filters by relevance, extracts key information, generates summaries,
-and publishes daily digests to Notion.
+AI News Daily Digest - Using Groq + Tavily MCP
+Automated content curation system that uses Groq's Responses API with 
+Tavily MCP for intelligent search, extraction, and summarization.
 
-Free tier compatible: Tavily (1000 credits/mo), Groq (free), Notion API (free)
+This demonstrates how Groq and Tavily MCP work together as an agentic system.
 """
 
 import os
 import json
+import time
+import re
 from datetime import datetime, timezone
-from typing import Optional
 import requests
 
 # =============================================================================
@@ -23,214 +23,154 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 NOTION_API_KEY = os.getenv("NOTION_API_KEY")
 NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
 
+# Groq model that supports MCP tools
+GROQ_MODEL = "compound-beta"  # Groq's compound model for tool use
+
 # Search Configuration
-SEARCH_QUERY = "AI artificial intelligence LLM startup funding product launch"
-SEARCH_TOPICS = ["AI", "LLM", "machine learning", "startup", "funding", "product launch", "OpenAI", "Anthropic", "Google AI", "Meta AI"]
 MAX_ARTICLES = 10
 
-# Topic tags for classification
-TOPIC_TAGS = {
-    "LLM": ["llm", "language model", "gpt", "claude", "gemini", "llama", "chatgpt", "chatbot"],
-    "Funding": ["funding", "raised", "investment", "series a", "series b", "series c", "valuation", "investor"],
-    "Startup": ["startup", "founded", "launch", "new company", "stealth"],
-    "Product Launch": ["launch", "released", "announced", "introducing", "new feature", "update"],
-    "Research": ["research", "paper", "study", "breakthrough", "discovered", "arxiv"],
-    "Regulation": ["regulation", "law", "policy", "government", "eu ai act", "congress", "senate"],
-    "Open Source": ["open source", "github", "hugging face", "weights", "apache", "mit license"],
-}
-
 # =============================================================================
-# TAVILY API - Search & Extract
+# GROQ + TAVILY MCP - Agentic Search & Summarization
 # =============================================================================
 
-def tavily_search(query: str, max_results: int = 15) -> list[dict]:
+def groq_with_tavily_mcp(prompt: str, max_retries: int = 3) -> str:
     """
-    Search for recent AI news using Tavily API.
-    Cost: 2 credits (advanced search)
+    Use Groq's Responses API with Tavily MCP tools.
+    The LLM decides when and how to use Tavily search/extract.
     """
-    url = "https://api.tavily.com/search"
+    url = "https://api.groq.com/openai/v1/responses"
     
-    payload = {
-        "api_key": TAVILY_API_KEY,
-        "query": query,
-        "search_depth": "advanced",  # 2 credits, but better results
-        "topic": "news",
-        "days": 1,  # Last 24 hours
-        "max_results": max_results,
-        "include_answer": False,
-        "include_raw_content": False,
-    }
-    
-    try:
-        response = requests.post(url, json=payload, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        
-        results = data.get("results", [])
-        print(f"✓ Tavily search returned {len(results)} results")
-        return results
-        
-    except requests.exceptions.RequestException as e:
-        print(f"✗ Tavily search error: {e}")
-        return []
-
-
-def tavily_extract(urls: list[str]) -> list[dict]:
-    """
-    Extract full content from URLs using Tavily API.
-    Cost: 1 credit per 5 URLs (basic extraction)
-    """
-    if not urls:
-        return []
-    
-    url = "https://api.tavily.com/extract"
-    
-    payload = {
-        "api_key": TAVILY_API_KEY,
-        "urls": urls[:MAX_ARTICLES],  # Limit to top articles
-    }
-    
-    try:
-        response = requests.post(url, json=payload, timeout=60)
-        response.raise_for_status()
-        data = response.json()
-        
-        results = data.get("results", [])
-        print(f"✓ Tavily extracted content from {len(results)} URLs")
-        return results
-        
-    except requests.exceptions.RequestException as e:
-        print(f"✗ Tavily extract error: {e}")
-        return []
-
-
-# =============================================================================
-# GROQ API - Summarization
-# =============================================================================
-
-def groq_summarize(article: dict) -> dict:
-    """
-    Generate a summary for a single article using Groq.
-    Returns dict with summary and detected topics.
-    """
-    url = "https://api.groq.com/openai/v1/chat/completions"
-    
-    title = article.get("title", "Untitled")
-    content = article.get("raw_content", article.get("content", ""))[:8000]  # Limit content length
-    source_url = article.get("url", "")
-    
-    prompt = f"""Analyze this AI/tech news article and provide:
-1. A concise 2-3 sentence summary highlighting the key points
-2. Classify it into one or more of these topics: LLM, Funding, Startup, Product Launch, Research, Regulation, Open Source
-
-Article Title: {title}
-Article Content: {content}
-
-Respond in this exact JSON format:
-{{"summary": "Your 2-3 sentence summary here", "topics": ["Topic1", "Topic2"]}}
-"""
-
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
         "Content-Type": "application/json",
     }
     
+    # Configure Tavily MCP as a tool
+    tools = [{
+        "type": "mcp",
+        "server_url": f"https://mcp.tavily.com/mcp/?tavilyApiKey={TAVILY_API_KEY}",
+        "server_label": "tavily",
+        "require_approval": "never",
+    }]
+    
     payload = {
-        "model": "llama-3.3-70b-versatile",
-        "messages": [
-            {"role": "system", "content": "You are a tech news analyst. Respond only with valid JSON."},
-            {"role": "user", "content": prompt}
-        ],
+        "model": GROQ_MODEL,
+        "input": prompt,
+        "tools": tools,
         "temperature": 0.3,
-        "max_tokens": 500,
     }
     
-    try:
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        
-        content = data["choices"][0]["message"]["content"]
-        
-        # Parse JSON response
+    for attempt in range(max_retries):
         try:
-            result = json.loads(content)
-            return {
-                "title": title,
-                "url": source_url,
-                "summary": result.get("summary", "Summary unavailable"),
-                "topics": result.get("topics", ["AI"]),
-            }
-        except json.JSONDecodeError:
-            # Fallback if JSON parsing fails
-            return {
-                "title": title,
-                "url": source_url,
-                "summary": content[:500],
-                "topics": ["AI"],
-            }
+            response = requests.post(url, headers=headers, json=payload, timeout=120)
             
-    except requests.exceptions.RequestException as e:
-        print(f"✗ Groq summarization error for '{title}': {e}")
-        return {
-            "title": title,
-            "url": source_url,
-            "summary": "Summary unavailable due to processing error.",
-            "topics": ["AI"],
-        }
+            # Handle rate limiting
+            if response.status_code == 429:
+                wait_time = (attempt + 1) * 10
+                print(f"   ⏳ Rate limited, waiting {wait_time}s before retry...")
+                time.sleep(wait_time)
+                continue
+            
+            response.raise_for_status()
+            data = response.json()
+            
+            # Extract the output text from the response
+            output_text = data.get("output_text", "")
+            if not output_text:
+                # Try alternative response structure
+                output = data.get("output", [])
+                if output and isinstance(output, list):
+                    for item in output:
+                        if item.get("type") == "message":
+                            content = item.get("content", [])
+                            for c in content:
+                                if c.get("type") == "text":
+                                    output_text = c.get("text", "")
+                                    break
+            
+            return output_text
+            
+        except requests.exceptions.RequestException as e:
+            if attempt < max_retries - 1:
+                wait_time = (attempt + 1) * 10
+                print(f"   ⏳ Request error, waiting {wait_time}s before retry...")
+                time.sleep(wait_time)
+                continue
+            print(f"✗ Groq MCP error: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                print(f"  Response: {e.response.text[:500]}")
+            return ""
+    
+    return ""
 
 
-def groq_generate_intro(summaries: list[dict]) -> str:
+def search_and_curate_news() -> dict:
     """
-    Generate an engaging introduction for the daily digest.
+    Use Groq + Tavily MCP to search for AI news and curate top stories.
+    The LLM autonomously uses Tavily tools to find and analyze news.
     """
-    url = "https://api.groq.com/openai/v1/chat/completions"
     
-    # Create a brief overview of today's articles
-    articles_overview = "\n".join([
-        f"- {s['title']}: {s['summary'][:100]}..." 
-        for s in summaries[:5]
-    ])
-    
-    prompt = f"""Based on today's AI news articles, write a brief 2-3 sentence introduction for a daily digest newsletter. 
-Be engaging and highlight the most significant theme or story of the day.
+    prompt = f"""You are an AI news curator. Your task is to find and summarize today's top AI and technology news.
 
-Today's top stories:
-{articles_overview}
+Use the tavily_search tool to search for recent AI news with these parameters:
+- Query: "AI artificial intelligence LLM startup funding product launch"
+- Topic: news
+- Time range: day (last 24 hours)
+- Max results: 15
+- Search depth: advanced
 
-Write only the introduction paragraph, no headers or formatting."""
+After getting the search results, analyze them and create a curated digest with exactly {MAX_ARTICLES} articles.
 
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json",
-    }
+For each article, provide:
+1. Title
+2. URL
+3. A 2-3 sentence summary
+4. Topics (classify as: LLM, Funding, Startup, Product Launch, Research, Regulation, Open Source)
+
+Also write a brief 2-3 sentence introduction for the digest highlighting the day's most significant story or theme.
+
+Format your response as JSON:
+{{
+    "introduction": "Your engaging intro here",
+    "articles": [
+        {{
+            "title": "Article title",
+            "url": "https://...",
+            "summary": "2-3 sentence summary",
+            "topics": ["Topic1", "Topic2"]
+        }}
+    ]
+}}
+
+Important: Return ONLY valid JSON, no markdown code blocks or other text."""
+
+    print("🤖 Using Groq + Tavily MCP to search and curate news...")
+    result = groq_with_tavily_mcp(prompt)
     
-    payload = {
-        "model": "llama-3.3-70b-versatile",
-        "messages": [
-            {"role": "system", "content": "You are a tech newsletter editor. Be concise and engaging."},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.7,
-        "max_tokens": 200,
-    }
+    if not result:
+        return {"introduction": "", "articles": []}
     
+    # Parse JSON from response
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        return data["choices"][0]["message"]["content"].strip()
+        # Clean up response - remove markdown code blocks if present
+        cleaned = result.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r'^```(?:json)?\n?', '', cleaned)
+            cleaned = re.sub(r'\n?```$', '', cleaned)
         
-    except requests.exceptions.RequestException as e:
-        print(f"✗ Groq intro generation error: {e}")
-        return "Here's your daily roundup of the most important AI and technology news."
+        data = json.loads(cleaned)
+        return data
+    except json.JSONDecodeError as e:
+        print(f"✗ Failed to parse JSON response: {e}")
+        print(f"  Raw response: {result[:500]}...")
+        return {"introduction": "", "articles": []}
 
 
 # =============================================================================
 # NOTION API - Publishing
 # =============================================================================
 
-def notion_create_digest(date: datetime, intro: str, summaries: list[dict], all_topics: set) -> bool:
+def notion_create_digest(date: datetime, intro: str, articles: list[dict]) -> bool:
     """
     Create a new digest entry in Notion database.
     """
@@ -245,17 +185,33 @@ def notion_create_digest(date: datetime, intro: str, summaries: list[dict], all_
     # Format date string
     date_str = date.strftime("%B %d, %Y")
     
-    # Get top story
-    top_story = summaries[0]["title"] if summaries else "No stories today"
+    # Get top story and all topics
+    top_story = articles[0]["title"] if articles else "No stories today"
+    all_topics = set()
+    for article in articles:
+        all_topics.update(article.get("topics", []))
     
     # Build page content blocks
     children_blocks = [
         # Introduction
         {
             "object": "block",
+            "type": "callout",
+            "callout": {
+                "rich_text": [{"type": "text", "text": {"content": intro}}],
+                "icon": {"emoji": "🤖"},
+                "color": "blue_background"
+            }
+        },
+        # Powered by note
+        {
+            "object": "block",
             "type": "paragraph",
             "paragraph": {
-                "rich_text": [{"type": "text", "text": {"content": intro}}]
+                "rich_text": [
+                    {"type": "text", "text": {"content": "Powered by "}, "annotations": {"italic": True, "color": "gray"}},
+                    {"type": "text", "text": {"content": "Groq + Tavily MCP"}, "annotations": {"bold": True, "italic": True, "color": "gray"}},
+                ]
             }
         },
         # Divider
@@ -270,8 +226,13 @@ def notion_create_digest(date: datetime, intro: str, summaries: list[dict], all_
         },
     ]
     
-    # Add each article summary
-    for i, article in enumerate(summaries, 1):
+    # Add each article
+    for i, article in enumerate(articles, 1):
+        title = article.get("title", "Untitled")[:100]
+        article_url = article.get("url", "")
+        summary = article.get("summary", "No summary available")
+        topics = article.get("topics", ["AI"])
+        
         # Article title with link
         children_blocks.append({
             "object": "block",
@@ -280,15 +241,15 @@ def notion_create_digest(date: datetime, intro: str, summaries: list[dict], all_
                 "rich_text": [{
                     "type": "text",
                     "text": {
-                        "content": f"{i}. {article['title'][:100]}",
-                        "link": {"url": article["url"]} if article["url"] else None
+                        "content": f"{i}. {title}",
+                        "link": {"url": article_url} if article_url else None
                     }
                 }]
             }
         })
         
-        # Topics as callout
-        topics_str = " • ".join([f"#{t.replace(' ', '')}" for t in article["topics"]])
+        # Topics as tags
+        topics_str = " • ".join([f"#{t.replace(' ', '')}" for t in topics])
         children_blocks.append({
             "object": "block",
             "type": "paragraph",
@@ -304,19 +265,19 @@ def notion_create_digest(date: datetime, intro: str, summaries: list[dict], all_
             "object": "block",
             "type": "paragraph",
             "paragraph": {
-                "rich_text": [{"type": "text", "text": {"content": article["summary"]}}]
+                "rich_text": [{"type": "text", "text": {"content": summary}}]
             }
         })
         
         # Source link
-        if article["url"]:
+        if article_url:
             children_blocks.append({
                 "object": "block",
                 "type": "paragraph",
                 "paragraph": {
                     "rich_text": [{
                         "type": "text",
-                        "text": {"content": "🔗 Read full article", "link": {"url": article["url"]}},
+                        "text": {"content": "🔗 Read full article", "link": {"url": article_url}},
                         "annotations": {"color": "blue"}
                     }]
                 }
@@ -340,16 +301,16 @@ def notion_create_digest(date: datetime, intro: str, summaries: list[dict], all_
                 "date": {"start": date.strftime("%Y-%m-%d")}
             },
             "Top Story": {
-                "rich_text": [{"text": {"content": top_story[:2000]}}]  # Notion limit
+                "rich_text": [{"text": {"content": top_story[:2000]}}]
             },
             "Topics": {
                 "multi_select": [{"name": topic} for topic in list(all_topics)[:10]]
             },
             "Article Count": {
-                "number": len(summaries)
+                "number": len(articles)
             }
         },
-        "children": children_blocks[:100]  # Notion limit of 100 blocks per request
+        "children": children_blocks[:100]  # Notion limit
     }
     
     try:
@@ -393,70 +354,47 @@ def validate_environment() -> bool:
 
 def run_daily_digest():
     """
-    Main pipeline: Search → Extract → Summarize → Publish
+    Main pipeline using Groq + Tavily MCP agentic system.
     """
     print("=" * 60)
-    print(f"🚀 AI News Daily Digest - {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    print(f"🚀 AI News Daily Digest (Groq + Tavily MCP)")
+    print(f"   {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print("=" * 60)
     
     # Step 0: Validate environment
     if not validate_environment():
         return False
     
-    # Step 1: Search for AI news
-    print("\n📡 Step 1: Searching for AI news...")
-    search_results = tavily_search(SEARCH_QUERY, max_results=15)
+    # Step 1: Search and curate news using Groq + Tavily MCP
+    print("\n📡 Step 1: Searching and curating AI news via MCP...")
+    digest_data = search_and_curate_news()
     
-    if not search_results:
-        print("✗ No search results found. Exiting.")
+    introduction = digest_data.get("introduction", "")
+    articles = digest_data.get("articles", [])
+    
+    if not articles:
+        print("✗ No articles found. Exiting.")
         return False
     
-    # Step 2: Extract full content from top articles
-    print("\n📄 Step 2: Extracting article content...")
-    urls = [r.get("url") for r in search_results if r.get("url")][:MAX_ARTICLES]
-    extracted = tavily_extract(urls)
+    print(f"✓ Curated {len(articles)} articles")
     
-    # Merge search results with extracted content
-    articles = []
-    for search_result in search_results[:MAX_ARTICLES]:
-        url = search_result.get("url", "")
-        
-        # Find matching extracted content
-        extracted_content = next(
-            (e for e in extracted if e.get("url") == url), 
-            {}
-        )
-        
-        articles.append({
-            "title": search_result.get("title", "Untitled"),
-            "url": url,
-            "content": search_result.get("content", ""),
-            "raw_content": extracted_content.get("raw_content", search_result.get("content", "")),
-        })
-    
-    # Step 3: Generate summaries using Groq
-    print(f"\n🤖 Step 3: Generating summaries for {len(articles)} articles...")
-    summaries = []
+    # Collect all topics
     all_topics = set()
-    
-    for i, article in enumerate(articles, 1):
-        print(f"   Processing {i}/{len(articles)}: {article['title'][:50]}...")
-        summary = groq_summarize(article)
-        summaries.append(summary)
-        all_topics.update(summary.get("topics", []))
-    
-    print(f"✓ Generated {len(summaries)} summaries")
+    for article in articles:
+        all_topics.update(article.get("topics", []))
     print(f"✓ Topics covered: {', '.join(all_topics)}")
     
-    # Step 4: Generate digest introduction
-    print("\n✍️  Step 4: Generating digest introduction...")
-    intro = groq_generate_intro(summaries)
-    print(f"✓ Introduction: {intro[:100]}...")
+    if introduction:
+        print(f"✓ Introduction: {introduction[:100]}...")
     
-    # Step 5: Publish to Notion
-    print("\n📤 Step 5: Publishing to Notion...")
+    # Step 2: Publish to Notion
+    print("\n📤 Step 2: Publishing to Notion...")
     today = datetime.now(timezone.utc)
-    success = notion_create_digest(today, intro, summaries, all_topics)
+    
+    if not introduction:
+        introduction = "Here's your daily roundup of the most important AI and technology news."
+    
+    success = notion_create_digest(today, introduction, articles)
     
     if success:
         print("\n" + "=" * 60)
