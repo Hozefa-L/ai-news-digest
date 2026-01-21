@@ -121,39 +121,40 @@ def search_and_curate_news() -> dict:
     The LLM autonomously uses Tavily tools to find and analyze news.
     """
     
-    prompt = f"""You are an AI news curator. Your task is to find and summarize today's top AI and technology news.
+    # Clear, explicit prompt that instructs using ONLY tavily_search
+    prompt = f"""You have access to the Tavily MCP server. You MUST use the tavily_search tool to complete this task.
 
-Use the tavily_search tool to search for recent AI news with these parameters:
-- query: "AI artificial intelligence LLM startup funding product launch"
-- topic: "news"
-- days: 1
-- max_results: 15
-- search_depth: "advanced"
-
-After getting the search results, analyze them and create a curated digest with exactly {MAX_ARTICLES} articles.
-
-For each article, provide:
-1. Title
-2. URL  
-3. A 2-3 sentence summary
-4. Topics (classify as: LLM, Funding, Startup, Product Launch, Research, Regulation, Open Source)
-
-Also write a brief 2-3 sentence introduction for the digest highlighting the day's most significant story or theme.
-
-Format your final response as JSON only:
+STEP 1: Call the tavily_search tool with these EXACT parameters:
 {{
-    "introduction": "Your engaging intro here",
+    "query": "AI artificial intelligence machine learning news today",
+    "topic": "news",
+    "days": 1,
+    "max_results": 15,
+    "search_depth": "basic"
+}}
+
+STEP 2: After receiving the search results, analyze them and select the {MAX_ARTICLES} most important and diverse stories about AI/ML.
+
+STEP 3: Format your response as a JSON object with this structure:
+{{
+    "introduction": "A 2-3 sentence engaging introduction highlighting the day's most significant AI story or theme",
     "articles": [
         {{
-            "title": "Article title",
-            "url": "https://...",
-            "summary": "2-3 sentence summary",
+            "title": "The article headline",
+            "url": "https://the-source-url.com/article",
+            "summary": "A 2-3 sentence summary of the key points",
             "topics": ["Topic1", "Topic2"]
         }}
     ]
 }}
 
-Return ONLY the JSON object, no other text."""
+For topics, use these categories: LLM, Funding, Startup, Product Launch, Research, Regulation, Open Source, Hardware, Robotics, AI Safety
+
+IMPORTANT INSTRUCTIONS:
+- Use ONLY the tavily_search tool (do NOT use tavily_extract or any other tools)
+- Return ONLY valid JSON in your final response, no markdown code blocks
+- Include exactly {MAX_ARTICLES} articles in your response
+- Use the actual URLs from the search results"""
 
     print("🤖 Using Groq + Tavily MCP to search and curate news...")
     result = groq_with_tavily_mcp(prompt)
@@ -165,6 +166,11 @@ Return ONLY the JSON object, no other text."""
     try:
         # Clean up response - remove markdown code blocks if present
         cleaned = result.strip()
+        
+        # Remove markdown code blocks
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r'^```(?:json)?\n?', '', cleaned)
+            cleaned = re.sub(r'\n?```$', '', cleaned)
         
         # Find JSON in the response
         json_match = re.search(r'\{[\s\S]*\}', cleaned)

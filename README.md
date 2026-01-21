@@ -15,7 +15,7 @@ Automated content curation system demonstrating **Groq + Tavily MCP** as an agen
 │   │             │    Tool Calls        │  (hosted)      │  │
 │   │  gpt-oss-   │                      │                │  │
 │   │    120b     │  tavily_search ────► │  • search      │  │
-│   │             │  tavily_extract ───► │  • extract     │  │
+│   │             │                      │                │  │
 │   └─────────────┘                      └────────────────┘  │
 │          │                                                  │
 │          │ Curated JSON                                    │
@@ -30,7 +30,7 @@ Automated content curation system demonstrating **Groq + Tavily MCP** as an agen
 ### Why Notion Uses REST API (Not MCP)
 
 | Service | Has Hosted MCP? | Our Approach |
-|---------|-----------------|--------------|
+|---------|-----------------|--------------| 
 | **Tavily** | ✅ Yes (`mcp.tavily.com`) | MCP via Groq |
 | **Notion** | ❌ No (local server only) | REST API |
 
@@ -41,7 +41,7 @@ Tavily provides a hosted MCP server. Notion's MCP server must run locally, which
 ## Features
 
 - 🔗 **MCP Integration**: Groq's Responses API with Tavily MCP
-- 🤖 **Agentic Search**: LLM autonomously decides how to use tools
+- 🤖 **Agentic Search**: LLM autonomously uses tavily_search tool
 - 📰 **Smart Curation**: AI selects and summarizes top 10 stories
 - 🏷️ **Auto-Tagging**: Topics classified automatically
 - 📊 **Notion Database**: Searchable knowledge base
@@ -131,7 +131,7 @@ response = requests.post(
 )
 ```
 
-The LLM **decides** when to call `tavily_search` and how to process results — true agentic behavior!
+The prompt explicitly instructs the LLM to use `tavily_search` with specific parameters — ensuring reliable MCP tool execution!
 
 ---
 
@@ -155,6 +155,7 @@ schedule:
 |-------|-----|
 | `404 Notion error` | Connect integration: ⋯ → Add connections |
 | `429 Rate limited` | Script auto-retries; wait and try again |
+| `424 MCP error` | Retry; check Tavily/Groq status pages |
 | `No articles found` | Check Tavily API key; try again later |
 | `tool calling not supported` | Using wrong model; must be `openai/gpt-oss-120b` |
 
@@ -187,6 +188,6 @@ ai-news-digest/
 
 ## Credits
 
-Built with [Groq](https://groq.com) + [Tavily MCP](https://tavily.com) following the [official docs](https://console.groq.com/docs/tavily).
+Built with [Groq](https://groq.com) + [Tavily MCP](https://tavily.com) following the [official docs](https://console.groq.com/docs/mcp).
 
 MIT License
