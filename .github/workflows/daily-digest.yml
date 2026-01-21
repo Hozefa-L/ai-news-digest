@@ -12,6 +12,9 @@ jobs:
   generate-digest:
     runs-on: ubuntu-latest
     
+    permissions:
+      contents: write  # Required to push commits
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -30,9 +33,15 @@ jobs:
         env:
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
-          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
         run: python daily_digest.py
+      
+      - name: Commit and push digest
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add digests/
+          git diff --staged --quiet || git commit -m "📰 Add AI digest for $(date +'%Y-%m-%d')"
+          git push
       
       - name: Report Status
         if: failure()

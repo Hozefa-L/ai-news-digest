@@ -4,7 +4,7 @@ Automated content curation system that uses Groq's Responses API with
 Tavily MCP for intelligent search, extraction, and summarization.
 
 This demonstrates how Groq and Tavily MCP work together as an agentic system.
-For GitHub Actions: Uses Tavily MCP + Notion REST API
+Output: Markdown files saved to the repository (digests/ folder)
 """
 
 import os
@@ -21,14 +21,15 @@ import requests
 # API Keys (from environment variables)
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-NOTION_API_KEY = os.getenv("NOTION_API_KEY")
-NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
 
 # Groq model that supports MCP tools (from Groq docs)
 GROQ_MODEL = "openai/gpt-oss-120b"
 
 # Search Configuration
 MAX_ARTICLES = 10
+
+# Output directory for digests
+DIGEST_DIR = "digests"
 
 # =============================================================================
 # GROQ + TAVILY MCP - Agentic Search & Summarization
@@ -187,167 +188,158 @@ IMPORTANT INSTRUCTIONS:
 
 
 # =============================================================================
-# NOTION API - Publishing (REST API for GitHub Actions compatibility)
+# MARKDOWN OUTPUT - Save digest as a markdown file
 # =============================================================================
 
-def notion_create_digest(date: datetime, intro: str, articles: list[dict]) -> bool:
+def save_digest_markdown(date: datetime, intro: str, articles: list[dict]) -> str:
     """
-    Create a new digest entry in Notion database.
-    Uses REST API for GitHub Actions compatibility.
+    Save the digest as a beautifully formatted Markdown file.
+    Returns the path to the saved file.
     """
-    url = "https://api.notion.com/v1/pages"
+    # Create digests directory if it doesn't exist
+    os.makedirs(DIGEST_DIR, exist_ok=True)
     
-    headers = {
-        "Authorization": f"Bearer {NOTION_API_KEY}",
-        "Content-Type": "application/json",
-        "Notion-Version": "2022-06-28",
-    }
-    
-    # Format date string
+    # Format date strings
     date_str = date.strftime("%B %d, %Y")
+    file_date = date.strftime("%Y-%m-%d")
+    filename = f"{DIGEST_DIR}/{file_date}.md"
     
-    # Get top story and all topics
-    top_story = articles[0]["title"] if articles else "No stories today"
+    # Collect all topics
     all_topics = set()
     for article in articles:
         all_topics.update(article.get("topics", []))
     
-    # Build page content blocks
-    children_blocks = [
-        # Introduction
-        {
-            "object": "block",
-            "type": "callout",
-            "callout": {
-                "rich_text": [{"type": "text", "text": {"content": intro}}],
-                "icon": {"emoji": "🤖"},
-                "color": "blue_background"
-            }
-        },
-        # Powered by note
-        {
-            "object": "block",
-            "type": "paragraph",
-            "paragraph": {
-                "rich_text": [
-                    {"type": "text", "text": {"content": "Powered by "}, "annotations": {"italic": True, "color": "gray"}},
-                    {"type": "text", "text": {"content": "Groq + Tavily MCP"}, "annotations": {"bold": True, "italic": True, "color": "gray"}},
-                ]
-            }
-        },
-        # Divider
-        {"object": "block", "type": "divider", "divider": {}},
-        # Section header
-        {
-            "object": "block",
-            "type": "heading_2",
-            "heading_2": {
-                "rich_text": [{"type": "text", "text": {"content": "📰 Today's Stories"}}]
-            }
-        },
-    ]
+    # Build markdown content
+    md_content = f"""# 🤖 AI News Digest - {date_str}
+
+> {intro}
+
+*Powered by [Groq](https://groq.com) + [Tavily MCP](https://tavily.com)*
+
+---
+
+## 📊 Today's Coverage
+
+**Articles:** {len(articles)} | **Topics:** {', '.join(sorted(all_topics))}
+
+---
+
+## 📰 Top Stories
+
+"""
     
     # Add each article
     for i, article in enumerate(articles, 1):
-        title = article.get("title", "Untitled")[:100]
+        title = article.get("title", "Untitled")
         article_url = article.get("url", "")
         summary = article.get("summary", "No summary available")
         topics = article.get("topics", ["AI"])
         
-        # Article title with link
-        children_blocks.append({
-            "object": "block",
-            "type": "heading_3",
-            "heading_3": {
-                "rich_text": [{
-                    "type": "text",
-                    "text": {
-                        "content": f"{i}. {title}",
-                        "link": {"url": article_url} if article_url else None
-                    }
-                }]
-            }
-        })
+        topics_badges = " ".join([f"`{t}`" for t in topics])
         
-        # Topics as tags
-        topics_str = " • ".join([f"#{t.replace(' ', '')}" for t in topics])
-        children_blocks.append({
-            "object": "block",
-            "type": "paragraph",
-            "paragraph": {
-                "rich_text": [
-                    {"type": "text", "text": {"content": topics_str}, "annotations": {"color": "gray"}}
-                ]
-            }
-        })
-        
-        # Summary
-        children_blocks.append({
-            "object": "block",
-            "type": "paragraph",
-            "paragraph": {
-                "rich_text": [{"type": "text", "text": {"content": summary}}]
-            }
-        })
-        
-        # Source link
-        if article_url:
-            children_blocks.append({
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{
-                        "type": "text",
-                        "text": {"content": "🔗 Read full article", "link": {"url": article_url}},
-                        "annotations": {"color": "blue"}
-                    }]
-                }
-            })
-        
-        # Spacer
-        children_blocks.append({
-            "object": "block",
-            "type": "paragraph",
-            "paragraph": {"rich_text": []}
-        })
+        md_content += f"""### {i}. {title}
+
+{topics_badges}
+
+{summary}
+
+🔗 [Read full article]({article_url})
+
+---
+
+"""
     
-    # Build the page payload
-    payload = {
-        "parent": {"database_id": NOTION_DATABASE_ID},
-        "properties": {
-            "Name": {
-                "title": [{"text": {"content": f"AI Digest - {date_str}"}}]
-            },
-            "Date": {
-                "date": {"start": date.strftime("%Y-%m-%d")}
-            },
-            "Top Story": {
-                "rich_text": [{"text": {"content": top_story[:2000]}}]
-            },
-            "Topics": {
-                "multi_select": [{"name": topic} for topic in list(all_topics)[:10]]
-            },
-            "Article Count": {
-                "number": len(articles)
-            }
-        },
-        "children": children_blocks[:100]  # Notion limit
-    }
+    # Add footer
+    md_content += f"""
+## 📅 Archive
+
+Browse all digests in the [`digests/`](.) folder.
+
+---
+
+*Generated on {date.strftime("%Y-%m-%d at %H:%M UTC")} using Groq + Tavily MCP*
+"""
     
-    try:
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
-        response.raise_for_status()
-        data = response.json()
+    # Write to file
+    with open(filename, 'w', encoding='utf-8') as f:
+        f.write(md_content)
+    
+    print(f"✓ Digest saved to: {filename}")
+    return filename
+
+
+def update_readme_index(date: datetime):
+    """
+    Update the digests/README.md with an index of all digests.
+    """
+    index_file = f"{DIGEST_DIR}/README.md"
+    
+    # Get list of all digest files
+    digest_files = []
+    if os.path.exists(DIGEST_DIR):
+        for f in os.listdir(DIGEST_DIR):
+            if f.endswith('.md') and f != 'README.md':
+                digest_files.append(f)
+    
+    digest_files.sort(reverse=True)  # Most recent first
+    
+    # Build index content
+    index_content = """# 📚 AI News Digest Archive
+
+Daily AI news digests curated by **Groq + Tavily MCP**.
+
+## 📅 All Digests
+
+| Date | Link |
+|------|------|
+"""
+    
+    for f in digest_files[:30]:  # Show last 30
+        date_str = f.replace('.md', '')
+        try:
+            parsed_date = datetime.strptime(date_str, "%Y-%m-%d")
+            display_date = parsed_date.strftime("%B %d, %Y")
+        except ValueError:
+            display_date = date_str
+        index_content += f"| {display_date} | [{date_str}](./{f}) |\n"
+    
+    if len(digest_files) > 30:
+        index_content += f"\n*...and {len(digest_files) - 30} more in this folder*\n"
+    
+    index_content += """
+---
+
+*Powered by [Groq](https://groq.com) + [Tavily MCP](https://tavily.com)*
+"""
+    
+    with open(index_file, 'w', encoding='utf-8') as f:
+        f.write(index_content)
+    
+    print(f"✓ Index updated: {index_file}")
+
+
+def print_digest_to_console(intro: str, articles: list[dict]):
+    """
+    Print the digest to console for GitHub Actions logs.
+    """
+    print("\n" + "=" * 60)
+    print("📰 TODAY'S AI NEWS DIGEST")
+    print("=" * 60)
+    print(f"\n💡 {intro}\n")
+    print("-" * 60)
+    
+    for i, article in enumerate(articles, 1):
+        title = article.get("title", "Untitled")
+        article_url = article.get("url", "")
+        summary = article.get("summary", "")
+        topics = article.get("topics", [])
         
-        page_url = data.get("url", "")
-        print(f"✓ Notion digest created: {page_url}")
-        return True
-        
-    except requests.exceptions.RequestException as e:
-        print(f"✗ Notion creation error: {e}")
-        if hasattr(e, 'response') and e.response is not None:
-            print(f"  Response: {e.response.text}")
-        return False
+        print(f"\n{i}. {title}")
+        print(f"   Topics: {', '.join(topics)}")
+        print(f"   {summary}")
+        print(f"   🔗 {article_url}")
+    
+    print("\n" + "=" * 60)
 
 
 # =============================================================================
@@ -359,8 +351,6 @@ def validate_environment() -> bool:
     required_vars = [
         ("TAVILY_API_KEY", TAVILY_API_KEY),
         ("GROQ_API_KEY", GROQ_API_KEY),
-        ("NOTION_API_KEY", NOTION_API_KEY),
-        ("NOTION_DATABASE_ID", NOTION_DATABASE_ID),
     ]
     
     missing = [name for name, value in required_vars if not value]
@@ -409,25 +399,28 @@ def run_daily_digest():
     if introduction:
         print(f"✓ Introduction: {introduction[:100]}...")
     
-    # Step 2: Publish to Notion
-    print("\n📤 Step 2: Publishing to Notion...")
+    # Step 2: Save as markdown file
+    print("\n📝 Step 2: Saving digest...")
     today = datetime.now(timezone.utc)
     
     if not introduction:
         introduction = "Here's your daily roundup of the most important AI and technology news."
     
-    success = notion_create_digest(today, introduction, articles)
+    # Save to markdown file
+    digest_file = save_digest_markdown(today, introduction, articles)
     
-    if success:
-        print("\n" + "=" * 60)
-        print("✅ Daily digest published successfully!")
-        print("=" * 60)
-    else:
-        print("\n" + "=" * 60)
-        print("❌ Failed to publish digest")
-        print("=" * 60)
+    # Update index
+    update_readme_index(today)
     
-    return success
+    # Print to console (visible in GitHub Actions logs)
+    print_digest_to_console(introduction, articles)
+    
+    print("\n" + "=" * 60)
+    print(f"✅ Daily digest saved to: {digest_file}")
+    print("   (Commit will be created by GitHub Actions)")
+    print("=" * 60)
+    
+    return True
 
 
 if __name__ == "__main__":
