@@ -4,6 +4,7 @@ Automated content curation system that uses Groq's Responses API with
 Tavily MCP for intelligent search, extraction, and summarization.
 
 This demonstrates how Groq and Tavily MCP work together as an agentic system.
+For GitHub Actions: Uses Tavily MCP + Notion REST API
 """
 
 import os
@@ -23,8 +24,8 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 NOTION_API_KEY = os.getenv("NOTION_API_KEY")
 NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
 
-# Groq model that supports MCP tools
-GROQ_MODEL = "compound-beta"  # Groq's compound model for tool use
+# Groq model that supports MCP tools (from Groq docs)
+GROQ_MODEL = "openai/gpt-oss-120b"
 
 # Search Configuration
 MAX_ARTICLES = 10
@@ -45,7 +46,7 @@ def groq_with_tavily_mcp(prompt: str, max_retries: int = 3) -> str:
         "Content-Type": "application/json",
     }
     
-    # Configure Tavily MCP as a tool
+    # Configure Tavily MCP as a tool (from Groq docs)
     tools = [{
         "type": "mcp",
         "server_url": f"https://mcp.tavily.com/mcp/?tavilyApiKey={TAVILY_API_KEY}",
@@ -57,16 +58,18 @@ def groq_with_tavily_mcp(prompt: str, max_retries: int = 3) -> str:
         "model": GROQ_MODEL,
         "input": prompt,
         "tools": tools,
-        "temperature": 0.3,
+        "temperature": 0.1,
+        "top_p": 0.4,
     }
     
     for attempt in range(max_retries):
         try:
-            response = requests.post(url, headers=headers, json=payload, timeout=120)
+            print(f"   Calling Groq Responses API (attempt {attempt + 1})...")
+            response = requests.post(url, headers=headers, json=payload, timeout=180)
             
             # Handle rate limiting
             if response.status_code == 429:
-                wait_time = (attempt + 1) * 10
+                wait_time = (attempt + 1) * 15
                 print(f"   ⏳ Rate limited, waiting {wait_time}s before retry...")
                 time.sleep(wait_time)
                 continue
@@ -84,15 +87,23 @@ def groq_with_tavily_mcp(prompt: str, max_retries: int = 3) -> str:
                         if item.get("type") == "message":
                             content = item.get("content", [])
                             for c in content:
-                                if c.get("type") == "text":
+                                if c.get("type") == "output_text":
                                     output_text = c.get("text", "")
                                     break
+                                elif c.get("type") == "text":
+                                    output_text = c.get("text", "")
+                                    break
+            
+            if not output_text:
+                # Last resort - just get any text content
+                output_text = json.dumps(data)
+                print(f"   Debug - Raw response structure: {list(data.keys())}")
             
             return output_text
             
         except requests.exceptions.RequestException as e:
             if attempt < max_retries - 1:
-                wait_time = (attempt + 1) * 10
+                wait_time = (attempt + 1) * 15
                 print(f"   ⏳ Request error, waiting {wait_time}s before retry...")
                 time.sleep(wait_time)
                 continue
@@ -113,23 +124,23 @@ def search_and_curate_news() -> dict:
     prompt = f"""You are an AI news curator. Your task is to find and summarize today's top AI and technology news.
 
 Use the tavily_search tool to search for recent AI news with these parameters:
-- Query: "AI artificial intelligence LLM startup funding product launch"
-- Topic: news
-- Time range: day (last 24 hours)
-- Max results: 15
-- Search depth: advanced
+- query: "AI artificial intelligence LLM startup funding product launch"
+- topic: "news"
+- days: 1
+- max_results: 15
+- search_depth: "advanced"
 
 After getting the search results, analyze them and create a curated digest with exactly {MAX_ARTICLES} articles.
 
 For each article, provide:
 1. Title
-2. URL
+2. URL  
 3. A 2-3 sentence summary
 4. Topics (classify as: LLM, Funding, Startup, Product Launch, Research, Regulation, Open Source)
 
 Also write a brief 2-3 sentence introduction for the digest highlighting the day's most significant story or theme.
 
-Format your response as JSON:
+Format your final response as JSON only:
 {{
     "introduction": "Your engaging intro here",
     "articles": [
@@ -142,7 +153,7 @@ Format your response as JSON:
     ]
 }}
 
-Important: Return ONLY valid JSON, no markdown code blocks or other text."""
+Return ONLY the JSON object, no other text."""
 
     print("🤖 Using Groq + Tavily MCP to search and curate news...")
     result = groq_with_tavily_mcp(prompt)
@@ -154,25 +165,29 @@ Important: Return ONLY valid JSON, no markdown code blocks or other text."""
     try:
         # Clean up response - remove markdown code blocks if present
         cleaned = result.strip()
-        if cleaned.startswith("```"):
-            cleaned = re.sub(r'^```(?:json)?\n?', '', cleaned)
-            cleaned = re.sub(r'\n?```$', '', cleaned)
+        
+        # Find JSON in the response
+        json_match = re.search(r'\{[\s\S]*\}', cleaned)
+        if json_match:
+            cleaned = json_match.group()
         
         data = json.loads(cleaned)
+        print(f"   ✓ Successfully parsed response")
         return data
     except json.JSONDecodeError as e:
         print(f"✗ Failed to parse JSON response: {e}")
-        print(f"  Raw response: {result[:500]}...")
+        print(f"  Raw response (first 1000 chars): {result[:1000]}...")
         return {"introduction": "", "articles": []}
 
 
 # =============================================================================
-# NOTION API - Publishing
+# NOTION API - Publishing (REST API for GitHub Actions compatibility)
 # =============================================================================
 
 def notion_create_digest(date: datetime, intro: str, articles: list[dict]) -> bool:
     """
     Create a new digest entry in Notion database.
+    Uses REST API for GitHub Actions compatibility.
     """
     url = "https://api.notion.com/v1/pages"
     
@@ -359,6 +374,7 @@ def run_daily_digest():
     print("=" * 60)
     print(f"🚀 AI News Daily Digest (Groq + Tavily MCP)")
     print(f"   {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    print(f"   Model: {GROQ_MODEL}")
     print("=" * 60)
     
     # Step 0: Validate environment
