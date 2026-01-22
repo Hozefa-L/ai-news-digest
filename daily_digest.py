@@ -1,10 +1,10 @@
 """
 AI News Daily Digest - Using Groq + Tavily MCP
-Automated content curation system that uses Groq's Responses API with 
+Automated content curation system that uses Groq's Responses API with
 Tavily MCP for intelligent search, extraction, and summarization.
 
-Curates real-time AI news from official sources: OpenAI, Google, Anthropic,
-Microsoft, Meta, HuggingFace, and top AI startups.
+Curates real-time AI news: product launches, research papers, funding rounds,
+open source releases, and industry developments from across the AI ecosystem.
 """
 
 import os
@@ -121,66 +121,84 @@ def groq_with_tavily_mcp(prompt: str, max_retries: int = 3) -> str:
 def search_and_curate_news() -> dict:
     """
     Use Groq + Tavily MCP to search for AI news and curate top stories.
-    Focuses on real-time announcements from major AI companies and startups.
+    Uses two complementary searches for diverse, unbiased coverage.
+    Credit usage: 2 basic searches/day = ~60 credits/month (well under 1000 limit)
     """
-    
-    # Optimized search query for real-time AI news from official sources
-    # Using "basic" search_depth to conserve Tavily credits
+
+    # Dual-search strategy for diverse, unbiased AI news coverage
+    # Search 1: Industry news (product launches, business moves)
+    # Search 2: Technical/research news (papers, open source, breakthroughs)
     prompt = f"""You have access to the Tavily MCP server. You MUST use the tavily_search tool to complete this task.
 
-STEP 1: Call the tavily_search tool with these EXACT parameters:
+STEP 1: Perform TWO searches to get diverse AI news coverage.
+
+SEARCH 1 - Industry & Product News:
+Call tavily_search with:
 {{
-    "query": "OpenAI Google DeepMind Anthropic Microsoft Meta AI HuggingFace announcement launch release update today",
+    "query": "artificial intelligence product launch announcement funding acquisition partnership today",
     "topic": "news",
     "days": 1,
-    "max_results": 20,
+    "max_results": 15,
     "search_depth": "basic"
 }}
 
-STEP 2: From the search results, select the {MAX_ARTICLES} most significant stories. Prioritize:
+SEARCH 2 - Technical & Research News:
+Call tavily_search with:
+{{
+    "query": "machine learning research paper open source AI model release breakthrough",
+    "topic": "news",
+    "days": 1,
+    "max_results": 15,
+    "search_depth": "basic"
+}}
 
-1. **Official announcements** - New model releases, API updates, product launches
-2. **Research papers** - New papers from top AI labs (arXiv, official blogs)
-3. **Startup news** - Funding rounds, product launches, acquisitions
-4. **Technical blogs** - Engineering posts from AI companies
-5. **Industry moves** - Partnerships, regulatory news, major hires
+STEP 2: From BOTH search results combined, select the {MAX_ARTICLES} most newsworthy stories.
 
-Prioritize stories from these sources (in order):
-- OpenAI, Anthropic, Google/DeepMind, Microsoft, Meta AI
-- HuggingFace, Stability AI, Mistral, Cohere, AI21
-- TechCrunch, The Verge, VentureBeat, Ars Technica (for AI coverage)
-- arXiv, official company blogs
+SELECTION CRITERIA (rank by newsworthiness, NOT by company name):
+1. **Breaking news** - First announcements of something new (product, model, funding, acquisition)
+2. **Significant impact** - News that affects many developers, users, or the industry
+3. **Technical breakthroughs** - Novel research, state-of-the-art results, new capabilities
+4. **Ecosystem changes** - Open source releases, API changes, platform updates
+5. **Market moves** - Funding rounds >$10M, major acquisitions, key partnerships
+
+DIVERSITY REQUIREMENTS:
+- Include stories from DIFFERENT companies/sources (no more than 2 stories from same source)
+- Mix of big tech AND startups/smaller players
+- Mix of product news AND research/technical news
+- Include at least one open source or research paper if available
 
 AVOID:
-- Opinion pieces without news value
-- Listicles or generic "AI will change everything" articles
-- Duplicate stories (pick the primary source)
+- Opinion pieces, editorials, or speculation
+- "Best AI tools" listicles or roundup articles
+- Duplicate coverage of the same story (pick the primary/original source)
+- Vague announcements without concrete details
 - Stories older than 24 hours
+- Clickbait or sensationalist headlines
 
 STEP 3: Format your response as a JSON object:
 {{
-    "introduction": "A 2-3 sentence summary of TODAY's most important AI development. Be specific about what was announced/released.",
+    "introduction": "2-3 sentences highlighting TODAY's most significant AI development. Be specific - mention names, numbers, or capabilities.",
     "articles": [
         {{
-            "title": "Specific headline describing the news",
+            "title": "Clear, specific headline (not clickbait)",
             "url": "https://source-url.com/article",
-            "summary": "2-3 sentences: What was announced? Why does it matter? Include specific details like model names, funding amounts, or features.",
+            "summary": "2-3 sentences: What exactly was announced/released? Why is it significant? Include specifics (model name, funding amount, benchmark scores, etc.)",
             "topics": ["Topic1", "Topic2"],
-            "source": "Company or publication name"
+            "source": "Original source name"
         }}
     ]
 }}
 
-Topic categories: Model Release, API Update, Research Paper, Funding, Product Launch, Open Source, Partnership, Regulation, Infrastructure, Startup
+Topic categories: Model Release, API Update, Research Paper, Funding, Product Launch, Open Source, Partnership, Regulation, Infrastructure, Robotics, AI Agents, Developer Tools
 
 IMPORTANT:
-- Use ONLY the tavily_search tool (do NOT use tavily_extract)
+- Use ONLY tavily_search (NOT tavily_extract) - run it TWICE as specified above
 - Return ONLY valid JSON, no markdown code blocks
-- Include exactly {MAX_ARTICLES} articles
-- Focus on TODAY's news - real-time updates only
-- Include the source field for each article"""
+- Include exactly {MAX_ARTICLES} articles with diverse sources
+- Each article must have concrete news value (something happened, was released, or announced)
+- Prioritize PRIMARY sources over secondary coverage"""
 
-    print("🤖 Using Groq + Tavily MCP to search real-time AI news...")
+    print("🤖 Using Groq + Tavily MCP with dual-search strategy...")
     result = groq_with_tavily_mcp(prompt)
     
     if not result:
@@ -310,7 +328,7 @@ def update_readme_index(date: datetime):
 
 Daily AI news digests curated from real-time sources using **Groq + Tavily MCP**.
 
-Covering: OpenAI, Google/DeepMind, Anthropic, Microsoft, Meta AI, HuggingFace, and top AI startups.
+Covering: product launches, research papers, funding rounds, open source releases, and developments across the AI ecosystem.
 
 ## 📅 Recent Digests
 
