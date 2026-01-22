@@ -3,8 +3,8 @@ AI News Daily Digest - Using Groq + Tavily MCP
 Automated content curation system that uses Groq's Responses API with 
 Tavily MCP for intelligent search, extraction, and summarization.
 
-This demonstrates how Groq and Tavily MCP work together as an agentic system.
-Output: Markdown files saved to the repository (digests/ folder)
+Curates real-time AI news from official sources: OpenAI, Google, Anthropic,
+Microsoft, Meta, HuggingFace, and top AI startups.
 """
 
 import os
@@ -96,7 +96,6 @@ def groq_with_tavily_mcp(prompt: str, max_retries: int = 3) -> str:
                                     break
             
             if not output_text:
-                # Last resort - just get any text content
                 output_text = json.dumps(data)
                 print(f"   Debug - Raw response structure: {list(data.keys())}")
             
@@ -119,45 +118,66 @@ def groq_with_tavily_mcp(prompt: str, max_retries: int = 3) -> str:
 def search_and_curate_news() -> dict:
     """
     Use Groq + Tavily MCP to search for AI news and curate top stories.
-    The LLM autonomously uses Tavily tools to find and analyze news.
+    Focuses on real-time announcements from major AI companies and startups.
     """
     
-    # Clear, explicit prompt that instructs using ONLY tavily_search
+    # Optimized search query for real-time AI news from official sources
+    # Using "basic" search_depth to conserve Tavily credits
     prompt = f"""You have access to the Tavily MCP server. You MUST use the tavily_search tool to complete this task.
 
 STEP 1: Call the tavily_search tool with these EXACT parameters:
 {{
-    "query": "AI artificial intelligence machine learning news today",
+    "query": "OpenAI Google DeepMind Anthropic Microsoft Meta AI HuggingFace announcement launch release update today",
     "topic": "news",
     "days": 1,
-    "max_results": 15,
+    "max_results": 20,
     "search_depth": "basic"
 }}
 
-STEP 2: After receiving the search results, analyze them and select the {MAX_ARTICLES} most important and diverse stories about AI/ML.
+STEP 2: From the search results, select the {MAX_ARTICLES} most significant stories. Prioritize:
 
-STEP 3: Format your response as a JSON object with this structure:
+1. **Official announcements** - New model releases, API updates, product launches
+2. **Research papers** - New papers from top AI labs (arXiv, official blogs)
+3. **Startup news** - Funding rounds, product launches, acquisitions
+4. **Technical blogs** - Engineering posts from AI companies
+5. **Industry moves** - Partnerships, regulatory news, major hires
+
+Prioritize stories from these sources (in order):
+- OpenAI, Anthropic, Google/DeepMind, Microsoft, Meta AI
+- HuggingFace, Stability AI, Mistral, Cohere, AI21
+- TechCrunch, The Verge, VentureBeat, Ars Technica (for AI coverage)
+- arXiv, official company blogs
+
+AVOID:
+- Opinion pieces without news value
+- Listicles or generic "AI will change everything" articles
+- Duplicate stories (pick the primary source)
+- Stories older than 24 hours
+
+STEP 3: Format your response as a JSON object:
 {{
-    "introduction": "A 2-3 sentence engaging introduction highlighting the day's most significant AI story or theme",
+    "introduction": "A 2-3 sentence summary of TODAY's most important AI development. Be specific about what was announced/released.",
     "articles": [
         {{
-            "title": "The article headline",
-            "url": "https://the-source-url.com/article",
-            "summary": "A 2-3 sentence summary of the key points",
-            "topics": ["Topic1", "Topic2"]
+            "title": "Specific headline describing the news",
+            "url": "https://source-url.com/article",
+            "summary": "2-3 sentences: What was announced? Why does it matter? Include specific details like model names, funding amounts, or features.",
+            "topics": ["Topic1", "Topic2"],
+            "source": "Company or publication name"
         }}
     ]
 }}
 
-For topics, use these categories: LLM, Funding, Startup, Product Launch, Research, Regulation, Open Source, Hardware, Robotics, AI Safety
+Topic categories: Model Release, API Update, Research Paper, Funding, Product Launch, Open Source, Partnership, Regulation, Infrastructure, Startup
 
-IMPORTANT INSTRUCTIONS:
-- Use ONLY the tavily_search tool (do NOT use tavily_extract or any other tools)
-- Return ONLY valid JSON in your final response, no markdown code blocks
-- Include exactly {MAX_ARTICLES} articles in your response
-- Use the actual URLs from the search results"""
+IMPORTANT:
+- Use ONLY the tavily_search tool (do NOT use tavily_extract)
+- Return ONLY valid JSON, no markdown code blocks
+- Include exactly {MAX_ARTICLES} articles
+- Focus on TODAY's news - real-time updates only
+- Include the source field for each article"""
 
-    print("🤖 Using Groq + Tavily MCP to search and curate news...")
+    print("🤖 Using Groq + Tavily MCP to search real-time AI news...")
     result = groq_with_tavily_mcp(prompt)
     
     if not result:
@@ -165,7 +185,6 @@ IMPORTANT INSTRUCTIONS:
     
     # Parse JSON from response
     try:
-        # Clean up response - remove markdown code blocks if present
         cleaned = result.strip()
         
         # Remove markdown code blocks
@@ -194,33 +213,36 @@ IMPORTANT INSTRUCTIONS:
 def save_digest_markdown(date: datetime, intro: str, articles: list[dict]) -> str:
     """
     Save the digest as a beautifully formatted Markdown file.
-    Returns the path to the saved file.
     """
-    # Create digests directory if it doesn't exist
     os.makedirs(DIGEST_DIR, exist_ok=True)
     
-    # Format date strings
     date_str = date.strftime("%B %d, %Y")
     file_date = date.strftime("%Y-%m-%d")
     filename = f"{DIGEST_DIR}/{file_date}.md"
     
-    # Collect all topics
+    # Collect all topics and sources
     all_topics = set()
+    all_sources = set()
     for article in articles:
         all_topics.update(article.get("topics", []))
+        if article.get("source"):
+            all_sources.add(article.get("source"))
     
-    # Build markdown content
     md_content = f"""# 🤖 AI News Digest - {date_str}
 
 > {intro}
 
-*Powered by [Groq](https://groq.com) + [Tavily MCP](https://tavily.com)*
+*Curated from real-time AI news using [Groq](https://groq.com) + [Tavily MCP](https://tavily.com)*
 
 ---
 
 ## 📊 Today's Coverage
 
-**Articles:** {len(articles)} | **Topics:** {', '.join(sorted(all_topics))}
+| Metric | Value |
+|--------|-------|
+| **Articles** | {len(articles)} |
+| **Topics** | {', '.join(sorted(all_topics))} |
+| **Sources** | {', '.join(sorted(all_sources)) if all_sources else 'Various'} |
 
 ---
 
@@ -228,18 +250,19 @@ def save_digest_markdown(date: datetime, intro: str, articles: list[dict]) -> st
 
 """
     
-    # Add each article
     for i, article in enumerate(articles, 1):
         title = article.get("title", "Untitled")
         article_url = article.get("url", "")
         summary = article.get("summary", "No summary available")
         topics = article.get("topics", ["AI"])
+        source = article.get("source", "")
         
         topics_badges = " ".join([f"`{t}`" for t in topics])
+        source_text = f" — *{source}*" if source else ""
         
         md_content += f"""### {i}. {title}
 
-{topics_badges}
+{topics_badges}{source_text}
 
 {summary}
 
@@ -249,7 +272,6 @@ def save_digest_markdown(date: datetime, intro: str, articles: list[dict]) -> st
 
 """
     
-    # Add footer
     md_content += f"""
 ## 📅 Archive
 
@@ -257,10 +279,9 @@ Browse all digests in the [`digests/`](.) folder.
 
 ---
 
-*Generated on {date.strftime("%Y-%m-%d at %H:%M UTC")} using Groq + Tavily MCP*
+*Generated on {date.strftime("%Y-%m-%d at %H:%M UTC")} • Runs daily at 8 AM EST*
 """
     
-    # Write to file
     with open(filename, 'w', encoding='utf-8') as f:
         f.write(md_content)
     
@@ -274,27 +295,27 @@ def update_readme_index(date: datetime):
     """
     index_file = f"{DIGEST_DIR}/README.md"
     
-    # Get list of all digest files
     digest_files = []
     if os.path.exists(DIGEST_DIR):
         for f in os.listdir(DIGEST_DIR):
             if f.endswith('.md') and f != 'README.md':
                 digest_files.append(f)
     
-    digest_files.sort(reverse=True)  # Most recent first
+    digest_files.sort(reverse=True)
     
-    # Build index content
     index_content = """# 📚 AI News Digest Archive
 
-Daily AI news digests curated by **Groq + Tavily MCP**.
+Daily AI news digests curated from real-time sources using **Groq + Tavily MCP**.
 
-## 📅 All Digests
+Covering: OpenAI, Google/DeepMind, Anthropic, Microsoft, Meta AI, HuggingFace, and top AI startups.
+
+## 📅 Recent Digests
 
 | Date | Link |
 |------|------|
 """
     
-    for f in digest_files[:30]:  # Show last 30
+    for f in digest_files[:30]:
         date_str = f.replace('.md', '')
         try:
             parsed_date = datetime.strptime(date_str, "%Y-%m-%d")
@@ -309,7 +330,7 @@ Daily AI news digests curated by **Groq + Tavily MCP**.
     index_content += """
 ---
 
-*Powered by [Groq](https://groq.com) + [Tavily MCP](https://tavily.com)*
+*Updated daily at 8 AM EST • Powered by [Groq](https://groq.com) + [Tavily MCP](https://tavily.com)*
 """
     
     with open(index_file, 'w', encoding='utf-8') as f:
@@ -319,9 +340,7 @@ Daily AI news digests curated by **Groq + Tavily MCP**.
 
 
 def print_digest_to_console(intro: str, articles: list[dict]):
-    """
-    Print the digest to console for GitHub Actions logs.
-    """
+    """Print the digest to console for GitHub Actions logs."""
     print("\n" + "=" * 60)
     print("📰 TODAY'S AI NEWS DIGEST")
     print("=" * 60)
@@ -333,8 +352,10 @@ def print_digest_to_console(intro: str, articles: list[dict]):
         article_url = article.get("url", "")
         summary = article.get("summary", "")
         topics = article.get("topics", [])
+        source = article.get("source", "")
         
-        print(f"\n{i}. {title}")
+        source_text = f" [{source}]" if source else ""
+        print(f"\n{i}. {title}{source_text}")
         print(f"   Topics: {', '.join(topics)}")
         print(f"   {summary}")
         print(f"   🔗 {article_url}")
@@ -364,21 +385,18 @@ def validate_environment() -> bool:
 
 
 def run_daily_digest():
-    """
-    Main pipeline using Groq + Tavily MCP agentic system.
-    """
+    """Main pipeline using Groq + Tavily MCP agentic system."""
     print("=" * 60)
     print(f"🚀 AI News Daily Digest (Groq + Tavily MCP)")
-    print(f"   {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    print(f"   {datetime.now().strftime('%Y-%m-%d %H:%M')} UTC")
     print(f"   Model: {GROQ_MODEL}")
+    print(f"   Focus: Real-time AI news from official sources")
     print("=" * 60)
     
-    # Step 0: Validate environment
     if not validate_environment():
         return False
     
-    # Step 1: Search and curate news using Groq + Tavily MCP
-    print("\n📡 Step 1: Searching and curating AI news via MCP...")
+    print("\n📡 Step 1: Searching real-time AI news via MCP...")
     digest_data = search_and_curate_news()
     
     introduction = digest_data.get("introduction", "")
@@ -390,7 +408,6 @@ def run_daily_digest():
     
     print(f"✓ Curated {len(articles)} articles")
     
-    # Collect all topics
     all_topics = set()
     for article in articles:
         all_topics.update(article.get("topics", []))
@@ -399,25 +416,18 @@ def run_daily_digest():
     if introduction:
         print(f"✓ Introduction: {introduction[:100]}...")
     
-    # Step 2: Save as markdown file
     print("\n📝 Step 2: Saving digest...")
     today = datetime.now(timezone.utc)
     
     if not introduction:
-        introduction = "Here's your daily roundup of the most important AI and technology news."
+        introduction = "Here's your daily roundup of the most important AI news from official sources."
     
-    # Save to markdown file
     digest_file = save_digest_markdown(today, introduction, articles)
-    
-    # Update index
     update_readme_index(today)
-    
-    # Print to console (visible in GitHub Actions logs)
     print_digest_to_console(introduction, articles)
     
     print("\n" + "=" * 60)
     print(f"✅ Daily digest saved to: {digest_file}")
-    print("   (Commit will be created by GitHub Actions)")
     print("=" * 60)
     
     return True
