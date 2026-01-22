@@ -1,13 +1,16 @@
 # 📚 AI News Digest Archive
 
-Daily AI news digests curated by **Groq + Tavily MCP**.
+Daily AI news digests curated from real-time sources using **Groq + Tavily MCP**.
 
-## 📅 All Digests
+Covering: OpenAI, Google/DeepMind, Anthropic, Microsoft, Meta AI, HuggingFace, and top AI startups.
+
+## 📅 Recent Digests
 
 | Date | Link |
 |------|------|
+| January 22, 2026 | [2026-01-22](./2026-01-22.md) |
 | January 21, 2026 | [2026-01-21](./2026-01-21.md) |
 
 ---
 
-*Powered by [Groq](https://groq.com) + [Tavily MCP](https://tavily.com)*
+*Updated daily at 8 AM EST • Powered by [Groq](https://groq.com) + [Tavily MCP](https://tavily.com)*
