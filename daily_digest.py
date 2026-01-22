@@ -11,7 +11,10 @@ import os
 import json
 import time
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+
+# EST timezone (UTC-5)
+EST = timezone(timedelta(hours=-5))
 import requests
 
 # =============================================================================
@@ -417,7 +420,7 @@ def run_daily_digest():
         print(f"✓ Introduction: {introduction[:100]}...")
     
     print("\n📝 Step 2: Saving digest...")
-    today = datetime.now(timezone.utc)
+    today = datetime.now(EST)
     
     if not introduction:
         introduction = "Here's your daily roundup of the most important AI news from official sources."
