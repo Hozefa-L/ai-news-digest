@@ -2,7 +2,7 @@
 
 Daily AI news digests curated from real-time sources using **Groq + Tavily MCP**.
 
-Covering: OpenAI, Google/DeepMind, Anthropic, Microsoft, Meta AI, HuggingFace, and top AI startups.
+Covering: product launches, research papers, funding rounds, open source releases, and developments across the AI ecosystem.
 
 ## 📅 Recent Digests
 
