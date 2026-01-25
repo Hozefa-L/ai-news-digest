@@ -8,6 +8,7 @@ Covering: product launches, research papers, funding rounds, open source release
 
 | Date | Link |
 |------|------|
+| January 25, 2026 | [2026-01-25](./2026-01-25.md) |
 | January 24, 2026 | [2026-01-24](./2026-01-24.md) |
 | January 23, 2026 | [2026-01-23](./2026-01-23.md) |
 | January 22, 2026 | [2026-01-22](./2026-01-22.md) |
